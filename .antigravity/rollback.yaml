@@ -1,0 +1,33 @@
+rollback:
+  triggers:
+    - stage: post_deploy_smoke_test
+      condition: exit_code != 0
+      action: rollback_to_previous
+
+    - stage: security_header_check
+      condition: exit_code != 0
+      action: rollback_to_previous
+
+    - stage: health_check
+      condition: http_status != 200
+      retries: 3
+      retry_delay_seconds: 10
+      action: rollback_to_previous
+
+  rollback_steps:
+    backend:
+      - action: render_redeploy_previous
+        service: arru-backend
+      - action: notify
+        message: 'Arru backend rolled back due to failed post-deploy checks'
+
+    frontend:
+      - action: netlify_rollback_previous
+        site: arru-frontend
+      - action: notify
+        message: 'Arru frontend rolled back due to failed post-deploy checks'
+
+  notifications:
+    channel: email
+    recipients: [developer@arru.internal]
+    on: [rollback_triggered, rollback_complete, rollback_failed]

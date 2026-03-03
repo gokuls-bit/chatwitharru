@@ -1,0 +1,41 @@
+global:
+  project: arru
+  developer: Gokul Kumar Sant
+  node_version: 20
+
+pipelines:
+  frontend_deploy:
+    trigger:
+      event: push
+      branch: main
+      path_filter: arru-frontend/**
+    stages:
+      1_audit:       npm run audit --audit-level=high
+      2_lint:        npx eslint . --max-warnings 0
+      3_typecheck:   npx tsc --noEmit --strict
+      4_env_check:   bash ../scripts/check-env.sh
+      5_secrets:     node ../scripts/inject-secrets.js frontend
+      6_build:       npm run build
+      7_deploy:      netlify deploy --prod --dir=out
+      8_smoke:       npx playwright test scripts/smoke.test.ts
+      9_headers:     node scripts/verify-security-headers.js
+    on_failure: rollback + notify
+
+  backend_deploy:
+    trigger:
+      event: push
+      branch: main
+      path_filter: arru-backend/**
+    stages:
+      1_audit:       npm audit --audit-level=high
+      2_lint:        npx eslint . --max-warnings 0
+      3_typecheck:   npx tsc --noEmit --strict
+      4_test:        npm test
+      5_env_check:   bash ../scripts/check-env.sh
+      6_secrets:     node ../scripts/inject-secrets.js backend
+      7_deploy:      render deploy --service arru-backend
+      8_health:      curl -f BACKEND_URL/health
+      9_mongo:       node scripts/verify-mongo-ttl.js
+      10_smoke:      npx playwright test scripts/smoke.test.ts
+      11_headers:    node scripts/verify-security-headers.js
+    on_failure: rollback + notify
